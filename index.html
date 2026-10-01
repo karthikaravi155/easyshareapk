@@ -20,16 +20,26 @@
     --bubble-in: #1B2732; --bubble-out: #1D4B3F; --danger: #C25450;
     font-family: 'Manrope', system-ui, sans-serif;
   }
+  :root[data-theme="light"] {
+    --bg: #F4F6F8; --panel: #FFFFFF; --panel-2: #F0F3F5; --line: #DEE4E8;
+    --text: #19242D; --text-dim: #5C6B76; --text-faint: #8B98A2;
+    --accent: #1C8E73; --accent-dim: #DCF3EC; --gold: #AD7A2A;
+    --bubble-in: #EEF1F3; --bubble-out: #D7F0E8; --danger: #C25450;
+  }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
-    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+    transition: background 0.15s ease, color 0.15s ease; }
+  .theme-toggle { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-dim); font-size: 13px; font-weight: 600; background: none; border: none; text-align: left; width: 100%; }
+  .theme-toggle:hover { background: var(--panel-2); color: var(--text); }
+  .theme-toggle-login { position: absolute; top: 18px; right: 18px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 20px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
   .mono { font-family: 'IBM Plex Mono', monospace; }
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
   button { font-family: inherit; cursor: pointer; }
   input { font-family: inherit; }
 
-  .login-wrap { height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login-wrap { position: relative; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
   .login-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 32px 28px; }
   .login-brand { font-weight: 800; font-size: 19px; text-align: center; margin-bottom: 6px; }
   .login-brand span { color: var(--accent); }
@@ -123,6 +133,27 @@
 <div id="root"></div>
 
 <script>
+function syncThemeColorMeta() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', document.documentElement.getAttribute('data-theme') === 'light' ? '#F4F6F8' : '#0E1620');
+}
+(function initTheme() {
+  try {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch (e) {}
+  syncThemeColorMeta();
+})();
+window.toggleTheme = function() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  if (isLight) document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', 'light');
+  try { localStorage.setItem('theme', isLight ? 'dark' : 'light'); } catch (e) {}
+  syncThemeColorMeta();
+  render();
+};
+function themeIcon() { return document.documentElement.getAttribute('data-theme') === 'light' ? '🌙' : '☀️'; }
+
 const SUPABASE_URL = 'https://jkkdmuxryhvydkumgnnr.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impra2RtdXhyeWh2eWRrdW1nbm5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NTk3NTUsImV4cCI6MjEwNjIzNTc1NX0.R1nlIyfjO0WCsDkFjmy7ox9Ugy2JerQEfqWegbvpSJ8';
 
@@ -191,6 +222,7 @@ async function loadAppData() {
 function renderLogin() {
   return `
     <div class="login-wrap">
+      <button class="theme-toggle-login" onclick="toggleTheme()" title="Toggle theme">${themeIcon()}</button>
       <div class="login-card">
         <div class="login-brand">EasyShare <span>Leads</span></div>
         <div class="login-sub">Sign in to view your leads</div>
@@ -244,6 +276,7 @@ function renderApp() {
         <div class="nav-item ${state.page==='contacts'?'active':''}" data-page="contacts"><span class="nav-icon">☰</span> Contacts</div>
         <div class="nav-item ${state.page==='chats'?'active':''}" data-page="chats"><span class="nav-icon">✆</span> Chats</div>
         <div class="nav-spacer"></div>
+        <button class="theme-toggle" onclick="toggleTheme()"><span class="nav-icon">${themeIcon()}</span> ${document.documentElement.getAttribute('data-theme') === 'light' ? 'Dark Mode' : 'Light Mode'}</button>
         <button class="logout-btn" id="logout-btn"><span class="nav-icon">⏻</span> Sign Out</button>
       </div>
       <div class="main" id="main"></div>
@@ -410,10 +443,13 @@ function render() {
   const root = document.getElementById('root');
   if (state.loading) { root.innerHTML = `<div class="loading">Loading…</div>`; return; }
   if (state.initError) {
+    const isSandbox = /claude\.(ai|site)$/.test(location.hostname) || location.hostname === 'localhost';
     root.innerHTML = `<div class="loading" style="flex-direction:column;gap:10px;text-align:center;padding:30px;">
-      <div style="font-size:14px;color:var(--text);font-weight:700;">Can't reach the database from this preview</div>
-      <div style="font-size:12.5px;max-width:360px;">This sandboxed preview blocks outside network calls for security.
-      This is expected here — once deployed to Vercel (see README.md), this screen will load your real login and leads normally.</div>
+      <div style="font-size:14px;color:var(--text);font-weight:700;">Can't reach the database</div>
+      <div style="font-size:12.5px;max-width:360px;">${isSandbox
+        ? `This sandboxed preview blocks outside network calls for security. This is expected here — once deployed to Vercel, this screen will load your real login and leads normally.`
+        : `The app couldn't connect to Supabase. This usually means your Supabase project is paused (free tier projects pause after inactivity — check your Supabase dashboard and resume it), or there's a network issue. Open the browser console (F12) for the exact error.`}</div>
+      <button class="btn-primary" style="width:auto;padding:8px 20px;margin-top:4px;" onclick="location.reload()">Retry</button>
     </div>`;
     return;
   }
