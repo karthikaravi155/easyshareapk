@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EasyShare Leads</title>
+<meta name="theme-color" content="#0E1620">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --bg: #0E1620; --panel: #141F2B; --panel-2: #182530; --line: #24323F;
+    --text: #E7ECEF; --text-dim: #8DA0AD; --text-faint: #5E717D;
+    --accent: #22A583; --accent-dim: #163B32; --gold: #D4A24C;
+    --bubble-in: #1B2732; --bubble-out: #1D4B3F; --danger: #C25450;
+    font-family: 'Manrope', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+  button { font-family: inherit; cursor: pointer; }
+  input { font-family: inherit; }
+
+  .login-wrap { height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 32px 28px; }
+  .login-brand { font-weight: 800; font-size: 19px; text-align: center; margin-bottom: 6px; }
+  .login-brand span { color: var(--accent); }
+  .login-sub { font-size: 13px; color: var(--text-dim); text-align: center; margin-bottom: 24px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; }
+  .field input { width: 100%; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; color: var(--text); font-size: 14px; outline: none; }
+  .field input:focus { border-color: var(--accent); }
+  .btn-primary { width: 100%; background: var(--accent); color: #06140F; border: none; border-radius: 8px; padding: 11px; font-size: 14px; font-weight: 700; margin-top: 6px; }
+  .btn-primary:disabled { opacity: 0.6; }
+  .login-error { color: var(--danger); font-size: 12.5px; margin-top: 10px; text-align: center; min-height: 16px; }
+
+  .app { display: flex; height: 100%; min-height: 100vh; }
+  .nav { width: 220px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 20px 12px; }
+  .brand { font-weight: 800; font-size: 16px; padding: 0 10px 6px; letter-spacing: -0.01em; }
+  .brand span { color: var(--accent); }
+  .who { padding: 0 10px 20px; font-size: 11.5px; color: var(--text-dim); border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .who .role-tag { display: inline-block; margin-top: 4px; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: var(--accent-dim); color: var(--accent); text-transform: uppercase; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-dim); font-size: 13.5px; font-weight: 600; cursor: pointer; margin-bottom: 2px; }
+  .nav-item:hover { background: var(--panel-2); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+  .nav-icon { width: 18px; text-align: center; }
+  .nav-spacer { flex: 1; }
+  .logout-btn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-faint); font-size: 13px; font-weight: 600; background: none; border: none; text-align: left; }
+  .logout-btn:hover { background: var(--panel-2); color: var(--danger); }
+
+  .main { flex: 1; min-width: 0; overflow-y: auto; }
+  .page { padding: 26px 30px; }
+  .page-head { margin-bottom: 22px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .page-title { font-size: 20px; font-weight: 800; }
+  .page-sub { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+  .tl-filter { display: flex; align-items: center; gap: 8px; }
+  .tl-filter label { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+  .tl-filter select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 13px; outline: none; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 30px; }
+  .stat-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .stat-label { font-size: 12.5px; color: var(--text-dim); font-weight: 600; }
+  .stat-value { font-size: 26px; font-weight: 800; margin-top: 8px; }
+  .stat-note { font-size: 11.5px; color: var(--accent); margin-top: 4px; }
+
+  .panel-block { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+  .panel-block h3 { margin: 0 0 4px; font-size: 14.5px; }
+  .panel-block p { margin: 0; font-size: 12.5px; color: var(--text-dim); line-height: 1.6; }
+
+  .table-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .search-row { display: flex; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .search-row input { flex: 1; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 13px; outline: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 16px; font-size: 11.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .tag.done { background: var(--accent-dim); color: var(--accent); }
+  .tag.progress { background: #3A2E14; color: var(--gold); }
+  .table-scroll { overflow-x: auto; }
+
+  .chats-layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 110px); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  @media (max-width: 760px) {
+    .chats-layout { grid-template-columns: 1fr; }
+    .lead-col { display: var(--lead-col-display, flex); }
+    .thread-col { display: var(--thread-col-display, none); }
+  }
+  .lead-col { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; flex-direction: column; }
+  .lead-item { display: flex; gap: 10px; padding: 12px 14px; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .lead-item:hover, .lead-item.active { background: var(--panel-2); }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .lead-meta { min-width: 0; flex: 1; }
+  .lead-top { display: flex; justify-content: space-between; gap: 6px; }
+  .lead-phone { font-size: 13px; font-weight: 600; }
+  .lead-time { font-size: 10.5px; color: var(--text-faint); flex-shrink: 0; }
+  .lead-preview { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .thread-col { display: flex; flex-direction: column; background: var(--bg); }
+  .thread-head { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .back-btn { display: none; background: none; border: none; color: var(--text-dim); font-size: 20px; }
+  @media (max-width: 760px) { .back-btn { display: block; } }
+  .thread { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 70%; padding: 9px 13px; border-radius: 13px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
+  .bubble.in { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 4px; }
+  .bubble.out { align-self: flex-end; background: var(--bubble-out); border-bottom-right-radius: 4px; }
+  .bubble-time { display: block; margin-top: 4px; font-size: 10px; color: var(--text-faint); text-align: right; }
+
+  .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-dim); text-align: center; padding: 30px; }
+  .loading { display: flex; align-items: center; justify-content: center; height: 100vh; color: var(--text-dim); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script>
+const SUPABASE_URL = 'https://jkkdmuxryhvydkumgnnr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impra2RtdXhyeWh2eWRrdW1nbm5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NTk3NTUsImV4cCI6MjEwNjIzNTc1NX0.R1nlIyfjO0WCsDkFjmy7ox9Ugy2JerQEfqWegbvpSJ8';
+
+const state = {
+  session: null, profile: null, allProfiles: [], leads: [], messages: [],
+  page: 'dashboard', activePhone: null, tlFilter: 'all', loading: true, initError: false,
+};
+
+let supabaseClient = null;
+try {
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+  state.loading = false;
+  state.initError = true;
+}
+
+function esc(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+function fmtTime(ts) { const d = new Date(ts); if (isNaN(d)) return ''; return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); }
+function fmtListTime(ts) { const d = new Date(ts); if (isNaN(d)) return ''; const sameDay = d.toDateString() === new Date().toDateString(); return sameDay ? fmtTime(ts) : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); }
+function initials(phone) { return String(phone).replace(/\D/g, '').slice(-2) || '??'; }
+
+async function init() {
+  if (!supabaseClient) { render(); return; }
+  try {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    state.session = session;
+    if (session) await loadAppData();
+    state.loading = false;
+    render();
+
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      state.session = session;
+      if (session) { loadAppData().then(render); }
+      else { state.profile = null; state.leads = []; state.messages = []; render(); }
+    });
+  } catch (err) {
+    state.loading = false;
+    state.initError = true;
+    render();
+  }
+}
+
+async function login(email, password) {
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  return error;
+}
+async function logout() { await supabaseClient.auth.signOut(); }
+
+async function loadAppData() {
+  const uid = state.session.user.id;
+  const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', uid).single();
+  state.profile = profile;
+
+  if (profile && profile.role === 'admin') {
+    const { data: profiles } = await supabaseClient.from('profiles').select('*').eq('role', 'tl');
+    state.allProfiles = profiles || [];
+  }
+
+  const { data: leads } = await supabaseClient.from('leads').select('*').order('timestamp', { ascending: false });
+  state.leads = leads || [];
+
+  const { data: messages } = await supabaseClient.from('messages').select('*').order('timestamp', { ascending: true });
+  state.messages = messages || [];
+}
+
+function renderLogin() {
+  return `
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-brand">EasyShare <span>Leads</span></div>
+        <div class="login-sub">Sign in to view your leads</div>
+        <form id="login-form">
+          <div class="field"><label>Email</label><input type="email" id="login-email" required autocomplete="username"></div>
+          <div class="field"><label>Password</label><input type="password" id="login-password" required autocomplete="current-password"></div>
+          <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
+          <div class="login-error" id="login-error"></div>
+        </form>
+      </div>
+    </div>`;
+}
+function wireLogin() {
+  const form = document.getElementById('login-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('login-btn');
+    const errEl = document.getElementById('login-error');
+    btn.disabled = true; btn.textContent = 'Signing in…'; errEl.textContent = '';
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const error = await login(email, password);
+    if (error) { errEl.textContent = error.message; btn.disabled = false; btn.textContent = 'Sign In'; }
+  });
+}
+
+function visibleLeads() {
+  if (state.profile.role !== 'admin' || state.tlFilter === 'all') return state.leads;
+  return state.leads.filter(l => l.assigned_to === state.tlFilter);
+}
+function visibleMessages() {
+  const phones = new Set(visibleLeads().map(l => l.phone));
+  return state.messages.filter(m => phones.has(m.phone));
+}
+function tlName(id) {
+  const p = state.allProfiles.find(p => p.id === id);
+  return p ? p.name : '—';
+}
+
+function renderApp() {
+  return `
+    <div class="app">
+      <div class="nav">
+        <div class="brand">EasyShare <span>Leads</span></div>
+        <div class="who">Signed in as<br><strong style="color:var(--text)">${esc(state.profile?.name || state.session.user.email)}</strong>
+          <div class="role-tag">${esc(state.profile?.role || '')}</div>
+        </div>
+        <div class="nav-item ${state.page==='dashboard'?'active':''}" data-page="dashboard"><span class="nav-icon">◆</span> Dashboard</div>
+        <div class="nav-item ${state.page==='contacts'?'active':''}" data-page="contacts"><span class="nav-icon">☰</span> Contacts</div>
+        <div class="nav-item ${state.page==='chats'?'active':''}" data-page="chats"><span class="nav-icon">✆</span> Chats</div>
+        <div class="nav-spacer"></div>
+        <button class="logout-btn" id="logout-btn"><span class="nav-icon">⏻</span> Sign Out</button>
+      </div>
+      <div class="main" id="main"></div>
+    </div>`;
+}
+
+function tlFilterHtml() {
+  if (!state.profile || state.profile.role !== 'admin') return '';
+  const opts = state.allProfiles.map(p => `<option value="${p.id}" ${state.tlFilter===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  return `
+    <div class="tl-filter">
+      <label>Viewing:</label>
+      <select id="tl-filter-select">
+        <option value="all" ${state.tlFilter==='all'?'selected':''}>All Team Leads</option>
+        ${opts}
+      </select>
+    </div>`;
+}
+
+function renderDashboard() {
+  const leads = visibleLeads();
+  const msgs = visibleMessages();
+  const total = leads.length;
+  const done = leads.filter(l => l.step === 'done').length;
+  const open = total - done;
+  return `
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <div class="page-title">Welcome back, ${esc(state.profile.name)} 👋</div>
+          <div class="page-sub">Here's what's happening with your WhatsApp leads today.</div>
+        </div>
+        ${tlFilterHtml()}
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Total Leads</div><div class="stat-value">${total}</div><div class="stat-note">from WhatsApp</div></div>
+        <div class="stat-card"><div class="stat-label">Completed Signups</div><div class="stat-value">${done}</div><div class="stat-note">ready for advisor</div></div>
+        <div class="stat-card"><div class="stat-label">In Progress</div><div class="stat-value">${open}</div><div class="stat-note">mid-flow</div></div>
+        <div class="stat-card"><div class="stat-label">Messages Logged</div><div class="stat-value">${msgs.length}</div><div class="stat-note">total exchanged</div></div>
+      </div>
+      <div class="panel-block">
+        <h3>Live data</h3>
+        <p>This dashboard is connected to your Supabase database. New leads and messages from your WhatsApp automation appear here automatically on refresh.</p>
+      </div>
+    </div>`;
+}
+
+function renderContacts() {
+  const isAdmin = state.profile.role === 'admin';
+  const leads = visibleLeads();
+  const rows = leads.map(l => `
+    <tr>
+      <td class="mono">+${esc(l.phone)}</td>
+      <td>${esc(l.lead_name) || '—'}</td>
+      ${isAdmin ? `<td>${esc(tlName(l.assigned_to))}</td>` : ''}
+      <td>${esc(l.fund_range) || '—'}</td>
+      <td>${esc(l.segment) || '—'}</td>
+      <td>${esc(l.state) || '—'}</td>
+      <td>${esc(l.language) || '—'}</td>
+      <td><span class="tag ${l.step === 'done' ? 'done' : 'progress'}">${l.step === 'done' ? 'Completed' : 'In progress'}</span></td>
+    </tr>`).join('');
+  return `
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <div class="page-title">Contacts</div>
+          <div class="page-sub">${leads.length} leads visible to you</div>
+        </div>
+        ${tlFilterHtml()}
+      </div>
+      <div class="table-wrap">
+        <div class="search-row"><input placeholder="Search by phone…" oninput="filterContacts(this.value)"></div>
+        <div class="table-scroll">
+          <table id="contacts-table">
+            <thead><tr><th>Phone</th><th>Name</th>${isAdmin ? '<th>Assigned TL</th>' : ''}<th>Fund</th><th>Segment</th><th>State</th><th>Language</th><th>Status</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="8" style="color:var(--text-faint);">No leads yet.</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+window.filterContacts = function(q) {
+  q = q.replace(/\D/g, '');
+  document.querySelectorAll('#contacts-table tbody tr').forEach(tr => {
+    tr.style.display = tr.firstChild.textContent.includes(q) ? '' : 'none';
+  });
+};
+
+function groupMessages(msgs) {
+  const map = new Map();
+  for (const m of msgs) { if (!map.has(m.phone)) map.set(m.phone, []); map.get(m.phone).push(m); }
+  for (const [, arr] of map) arr.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  return map;
+}
+
+function renderChats() {
+  const msgs = visibleMessages();
+  const groups = groupMessages(msgs);
+  const phones = [...groups.keys()].sort((a, b) => new Date(groups.get(b).at(-1).timestamp) - new Date(groups.get(a).at(-1).timestamp));
+  if (state.activePhone && !groups.has(state.activePhone)) state.activePhone = null;
+  if (!state.activePhone && phones.length) state.activePhone = phones[0];
+
+  const listHtml = phones.length ? phones.map(phone => {
+    const thread = groups.get(phone), last = thread.at(-1);
+    const active = phone === state.activePhone ? 'active' : '';
+    return `<div class="lead-item ${active}" onclick="selectChat('${phone}')">
+      <div class="avatar">${initials(phone)}</div>
+      <div class="lead-meta">
+        <div class="lead-top"><div class="lead-phone mono">+${phone}</div><div class="lead-time mono">${fmtListTime(last.timestamp)}</div></div>
+        <div class="lead-preview">${last.direction === 'out' ? 'You: ' : ''}${esc(last.message)}</div>
+      </div>
+    </div>`;
+  }).join('') : `<div style="padding:20px;color:var(--text-faint);font-size:12.5px;">No conversations visible.</div>`;
+
+  let threadHtml = `<div class="empty">Select a conversation</div>`;
+  if (state.activePhone && groups.has(state.activePhone)) {
+    const thread = groups.get(state.activePhone);
+    const bubbles = thread.map(m => `<div class="bubble ${m.direction}">${esc(m.message)}<span class="bubble-time mono">${fmtTime(m.timestamp)}</span></div>`).join('');
+    threadHtml = `
+      <div class="thread-head">
+        <button class="back-btn" onclick="setMobilePane('list')">‹</button>
+        <div class="avatar">${initials(state.activePhone)}</div>
+        <div class="mono" style="font-weight:700;">+${state.activePhone}</div>
+      </div>
+      <div class="thread">${bubbles}</div>`;
+  }
+
+  return `
+    <div class="page" style="padding-bottom:0;">
+      <div class="page-head"><div class="page-title">Chats</div>${tlFilterHtml()}</div>
+      <div class="chats-layout" id="chats-layout">
+        <div class="lead-col" id="lead-col">${listHtml}</div>
+        <div class="thread-col" id="thread-col">${threadHtml}</div>
+      </div>
+    </div>`;
+}
+window.selectChat = function(phone) { state.activePhone = phone; setMobilePane('thread'); render(); };
+window.setMobilePane = function(which) {
+  const layout = document.getElementById('chats-layout');
+  if (!layout) return;
+  layout.style.setProperty('--lead-col-display', which === 'list' ? 'flex' : 'none');
+  layout.style.setProperty('--thread-col-display', which === 'thread' ? 'flex' : 'none');
+};
+
+function render() {
+  const root = document.getElementById('root');
+  if (state.loading) { root.innerHTML = `<div class="loading">Loading…</div>`; return; }
+  if (state.initError) {
+    root.innerHTML = `<div class="loading" style="flex-direction:column;gap:10px;text-align:center;padding:30px;">
+      <div style="font-size:14px;color:var(--text);font-weight:700;">Can't reach the database from this preview</div>
+      <div style="font-size:12.5px;max-width:360px;">This sandboxed preview blocks outside network calls for security.
+      This is expected here — once deployed to Vercel (see README.md), this screen will load your real login and leads normally.</div>
+    </div>`;
+    return;
+  }
+  if (!state.session) { root.innerHTML = renderLogin(); wireLogin(); return; }
+  if (!state.profile) { root.innerHTML = `<div class="loading">Setting up your account… if this doesn't finish, ask your admin to check your profile record.</div>`; return; }
+
+  root.innerHTML = renderApp();
+  const main = document.getElementById('main');
+  if (state.page === 'dashboard') main.innerHTML = renderDashboard();
+  else if (state.page === 'contacts') main.innerHTML = renderContacts();
+  else if (state.page === 'chats') { main.innerHTML = renderChats(); setMobilePane(window.innerWidth <= 760 ? 'list' : 'thread'); }
+
+  document.querySelectorAll('.nav-item').forEach(el => el.addEventListener('click', () => { state.page = el.dataset.page; render(); }));
+  document.getElementById('logout-btn').addEventListener('click', logout);
+  const tlSelect = document.getElementById('tl-filter-select');
+  if (tlSelect) tlSelect.addEventListener('change', (e) => { state.tlFilter = e.target.value; state.activePhone = null; render(); });
+}
+
+const initTimeout = setTimeout(() => {
+  if (state.loading) { state.loading = false; state.initError = true; render(); }
+}, 6000);
+init().finally(() => clearTimeout(initTimeout));
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(() => {}));
+}
+</script>
+</body>
+</html>
