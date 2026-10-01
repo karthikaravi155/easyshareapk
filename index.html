@@ -95,6 +95,7 @@
     .thread-col { display: var(--thread-col-display, none); }
   }
   .lead-col { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; flex-direction: column; }
+  .lead-col .search-row { position: sticky; top: 0; background: var(--panel); z-index: 1; }
   .lead-item { display: flex; gap: 10px; padding: 12px 14px; cursor: pointer; border-bottom: 1px solid var(--line); }
   .lead-item:hover, .lead-item.active { background: var(--panel-2); }
   .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
@@ -217,8 +218,10 @@ function wireLogin() {
 }
 
 function visibleLeads() {
-  if (state.profile.role !== 'admin' || state.tlFilter === 'all') return state.leads;
-  return state.leads.filter(l => l.assigned_to === state.tlFilter);
+  if (state.profile.role === 'admin') {
+    return state.tlFilter === 'all' ? state.leads : state.leads.filter(l => l.assigned_to === state.tlFilter);
+  }
+  return state.leads.filter(l => l.assigned_to === state.profile.id);
 }
 function visibleMessages() {
   const phones = new Set(visibleLeads().map(l => l.phone));
@@ -323,9 +326,14 @@ function renderContacts() {
     </div>`;
 }
 window.filterContacts = function(q) {
-  q = q.replace(/\D/g, '');
+  const qDigits = q.replace(/\D/g, '');
+  const qText = q.trim().toLowerCase();
   document.querySelectorAll('#contacts-table tbody tr').forEach(tr => {
-    tr.style.display = tr.firstChild.textContent.includes(q) ? '' : 'none';
+    const phoneCell = tr.children[0]?.textContent || '';
+    const nameCell = tr.children[1]?.textContent || '';
+    const matchesPhone = qDigits && phoneCell.includes(qDigits);
+    const matchesName = qText && nameCell.toLowerCase().includes(qText);
+    tr.style.display = (!q || matchesPhone || matchesName) ? '' : 'none';
   });
 };
 
@@ -339,6 +347,7 @@ function groupMessages(msgs) {
 function renderChats() {
   const msgs = visibleMessages();
   const groups = groupMessages(msgs);
+  const leadsByPhone = new Map(visibleLeads().map(l => [l.phone, l]));
   const phones = [...groups.keys()].sort((a, b) => new Date(groups.get(b).at(-1).timestamp) - new Date(groups.get(a).at(-1).timestamp));
   if (state.activePhone && !groups.has(state.activePhone)) state.activePhone = null;
   if (!state.activePhone && phones.length) state.activePhone = phones[0];
@@ -346,10 +355,12 @@ function renderChats() {
   const listHtml = phones.length ? phones.map(phone => {
     const thread = groups.get(phone), last = thread.at(-1);
     const active = phone === state.activePhone ? 'active' : '';
-    return `<div class="lead-item ${active}" onclick="selectChat('${phone}')">
+    const name = leadsByPhone.get(phone)?.lead_name || '';
+    const searchKey = (phone + ' ' + name).toLowerCase();
+    return `<div class="lead-item ${active}" data-search="${esc(searchKey)}" onclick="selectChat('${phone}')">
       <div class="avatar">${initials(phone)}</div>
       <div class="lead-meta">
-        <div class="lead-top"><div class="lead-phone mono">+${phone}</div><div class="lead-time mono">${fmtListTime(last.timestamp)}</div></div>
+        <div class="lead-top"><div class="lead-phone mono">${name ? esc(name) : '+' + phone}</div><div class="lead-time mono">${fmtListTime(last.timestamp)}</div></div>
         <div class="lead-preview">${last.direction === 'out' ? 'You: ' : ''}${esc(last.message)}</div>
       </div>
     </div>`;
@@ -372,12 +383,22 @@ function renderChats() {
     <div class="page" style="padding-bottom:0;">
       <div class="page-head"><div class="page-title">Chats</div>${tlFilterHtml()}</div>
       <div class="chats-layout" id="chats-layout">
-        <div class="lead-col" id="lead-col">${listHtml}</div>
+        <div class="lead-col" id="lead-col">
+          <div class="search-row" style="border-bottom:1px solid var(--line);"><input placeholder="Search name or number…" oninput="filterChats(this.value)"></div>
+          <div id="chat-list">${listHtml}</div>
+        </div>
         <div class="thread-col" id="thread-col">${threadHtml}</div>
       </div>
     </div>`;
 }
 window.selectChat = function(phone) { state.activePhone = phone; setMobilePane('thread'); render(); };
+window.filterChats = function(q) {
+  const qText = q.trim().toLowerCase();
+  document.querySelectorAll('#chat-list .lead-item').forEach(el => {
+    const key = el.dataset.search || '';
+    el.style.display = (!qText || key.includes(qText)) ? '' : 'none';
+  });
+};
 window.setMobilePane = function(which) {
   const layout = document.getElementById('chats-layout');
   if (!layout) return;
