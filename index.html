@@ -52,7 +52,7 @@
   .btn-primary:disabled { opacity: 0.6; }
   .login-error { color: var(--danger); font-size: 12.5px; margin-top: 10px; text-align: center; min-height: 16px; }
 
-  .app { display: flex; height: 100%; min-height: 100vh; }
+  .app { display: flex; height: 100%; min-height: 0; }
   .nav { width: 220px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 20px 12px; }
   .brand { font-weight: 800; font-size: 16px; padding: 0 10px 6px; letter-spacing: -0.01em; }
   .brand span { color: var(--accent); }
@@ -66,7 +66,7 @@
   .logout-btn { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--text-faint); font-size: 13px; font-weight: 600; background: none; border: none; text-align: left; }
   .logout-btn:hover { background: var(--panel-2); color: var(--danger); }
 
-  .main { flex: 1; min-width: 0; overflow-y: auto; }
+  .main { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; }
   .page { padding: 26px 30px; }
   .page-head { margin-bottom: 22px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
   .page-title { font-size: 20px; font-weight: 800; }
@@ -98,13 +98,14 @@
   .tag.progress { background: #3A2E14; color: var(--gold); }
   .table-scroll { overflow-x: auto; }
 
-  .chats-layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 110px); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .page.chat-page { height: 100%; display: flex; flex-direction: column; padding-bottom: 16px; }
+  .chats-layout { display: grid; grid-template-columns: 300px 1fr; grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   @media (max-width: 760px) {
     .chats-layout { grid-template-columns: 1fr; }
     .lead-col { display: var(--lead-col-display, flex); }
     .thread-col { display: var(--thread-col-display, none); }
   }
-  .lead-col { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; flex-direction: column; }
+  .lead-col { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; flex-direction: column; min-height: 0; }
   .lead-col .search-row { position: sticky; top: 0; background: var(--panel); z-index: 1; }
   .lead-item { display: flex; gap: 10px; padding: 12px 14px; cursor: pointer; border-bottom: 1px solid var(--line); }
   .lead-item:hover, .lead-item.active { background: var(--panel-2); }
@@ -114,11 +115,11 @@
   .lead-phone { font-size: 13px; font-weight: 600; }
   .lead-time { font-size: 10.5px; color: var(--text-faint); flex-shrink: 0; }
   .lead-preview { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-  .thread-col { display: flex; flex-direction: column; background: var(--bg); }
-  .thread-head { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .thread-col { display: flex; flex-direction: column; background: var(--bg); min-height: 0; }
+  .thread-head { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
   .back-btn { display: none; background: none; border: none; color: var(--text-dim); font-size: 20px; }
   @media (max-width: 760px) { .back-btn { display: block; } }
-  .thread { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .thread { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
   .bubble { max-width: 70%; padding: 9px 13px; border-radius: 13px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
   .bubble.in { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 4px; }
   .bubble.out { align-self: flex-end; background: var(--bubble-out); border-bottom-right-radius: 4px; }
@@ -159,7 +160,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const state = {
   session: null, profile: null, allProfiles: [], leads: [], messages: [],
-  page: 'dashboard', activePhone: null, tlFilter: 'all', loading: true, initError: false,
+  page: 'dashboard', activePhone: null, renderedPhone: null, tlFilter: 'all', loading: true, initError: false,
 };
 
 let supabaseClient = null;
@@ -184,10 +185,12 @@ async function init() {
     state.loading = false;
     render();
 
-    supabaseClient.auth.onAuthStateChange((_event, session) => {
+    supabaseClient.auth.onAuthStateChange((event, session) => {
       state.session = session;
-      if (session) { loadAppData().then(render); }
-      else { state.profile = null; state.leads = []; state.messages = []; render(); }
+      if (!session) { state.profile = null; state.leads = []; state.messages = []; render(); return; }
+      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
+      if (state.profile && state.profile.id === session.user.id) return;
+      loadAppData().then(render);
     });
   } catch (err) {
     state.loading = false;
@@ -202,21 +205,53 @@ async function login(email, password) {
 }
 async function logout() { await supabaseClient.auth.signOut(); }
 
+const mkey = m => m.id ?? (m.phone + '|' + m.timestamp + '|' + m.direction + '|' + m.message);
+let renderTimer = null;
+function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(render, 120); }
+
 async function loadAppData() {
   const uid = state.session.user.id;
-  const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', uid).single();
-  state.profile = profile;
+  const [p, tls, l, m] = await Promise.all([
+    supabaseClient.from('profiles').select('*').eq('id', uid).single(),
+    supabaseClient.from('profiles').select('*').eq('role', 'tl'),
+    supabaseClient.from('leads').select('*').order('timestamp', { ascending: false }),
+    supabaseClient.from('messages').select('*').order('timestamp', { ascending: false }).limit(1000)
+  ]);
+  state.profile = p.data;
+  state.allProfiles = (p.data && p.data.role === 'admin') ? (tls.data || []) : [];
+  state.leads = l.data || [];
+  state.messages = (m.data || []).reverse();
+  subscribeLive();
+}
 
-  if (profile && profile.role === 'admin') {
-    const { data: profiles } = await supabaseClient.from('profiles').select('*').eq('role', 'tl');
-    state.allProfiles = profiles || [];
-  }
+async function loadThread(phone) {
+  const { data } = await supabaseClient.from('messages').select('*').eq('phone', phone)
+    .order('timestamp', { ascending: false }).limit(300);
+  if (!data) return false;
+  const seen = new Set(state.messages.map(mkey));
+  const fresh = data.filter(x => !seen.has(mkey(x)));
+  if (!fresh.length) return false;
+  state.messages.push(...fresh);
+  return true;
+}
 
-  const { data: leads } = await supabaseClient.from('leads').select('*').order('timestamp', { ascending: false });
-  state.leads = leads || [];
-
-  const { data: messages } = await supabaseClient.from('messages').select('*').order('timestamp', { ascending: true });
-  state.messages = messages || [];
+let liveChannel = null;
+function subscribeLive() {
+  if (liveChannel) supabaseClient.removeChannel(liveChannel);
+  liveChannel = supabaseClient.channel('app-live')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, p => {
+      if (!state.messages.some(x => mkey(x) === mkey(p.new))) { state.messages.push(p.new); scheduleRender(); }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, p => {
+      if (p.eventType === 'DELETE') {
+        if (p.old && p.old.phone) state.leads = state.leads.filter(x => x.phone !== p.old.phone);
+      } else {
+        const i = state.leads.findIndex(x => x.phone === p.new.phone);
+        if (i >= 0) state.leads[i] = p.new; else state.leads.unshift(p.new);
+      }
+      scheduleRender();
+    })
+    .subscribe();
 }
 
 function renderLogin() {
@@ -319,7 +354,7 @@ function renderDashboard() {
       </div>
       <div class="panel-block">
         <h3>Live data</h3>
-        <p>This dashboard is connected to your Supabase database. New leads and messages from your WhatsApp automation appear here automatically on refresh.</p>
+        <p>This dashboard is connected to your Supabase database. New leads and messages from your WhatsApp automation appear here automatically.</p>
       </div>
     </div>`;
 }
@@ -413,7 +448,7 @@ function renderChats() {
   }
 
   return `
-    <div class="page" style="padding-bottom:0;">
+    <div class="page chat-page">
       <div class="page-head"><div class="page-title">Chats</div>${tlFilterHtml()}</div>
       <div class="chats-layout" id="chats-layout">
         <div class="lead-col" id="lead-col">
@@ -424,7 +459,10 @@ function renderChats() {
       </div>
     </div>`;
 }
-window.selectChat = function(phone) { state.activePhone = phone; setMobilePane('thread'); render(); };
+window.selectChat = function(phone) {
+  state.activePhone = phone; setMobilePane('thread'); render();
+  loadThread(phone).then(changed => { if (changed) render(); });
+};
 window.filterChats = function(q) {
   const qText = q.trim().toLowerCase();
   document.querySelectorAll('#chat-list .lead-item').forEach(el => {
@@ -440,6 +478,10 @@ window.setMobilePane = function(which) {
 };
 
 function render() {
+  const pt = document.querySelector('.thread'), pl = document.getElementById('lead-col');
+  const prevQ = (document.querySelector('#lead-col .search-row input') || {}).value || '';
+  const memo = { top: pt ? pt.scrollTop : 0, gap: pt ? pt.scrollHeight - pt.scrollTop - pt.clientHeight : 0, phone: state.renderedPhone, list: pl ? pl.scrollTop : 0 };
+
   const root = document.getElementById('root');
   if (state.loading) { root.innerHTML = `<div class="loading">Loading…</div>`; return; }
   if (state.initError) {
@@ -466,6 +508,13 @@ function render() {
   document.getElementById('logout-btn').addEventListener('click', logout);
   const tlSelect = document.getElementById('tl-filter-select');
   if (tlSelect) tlSelect.addEventListener('change', (e) => { state.tlFilter = e.target.value; state.activePhone = null; render(); });
+
+  const th = document.querySelector('.thread');
+  if (th) th.scrollTop = (memo.phone !== state.activePhone || memo.gap < 80) ? th.scrollHeight : memo.top;
+  const lc = document.getElementById('lead-col'); if (lc) lc.scrollTop = memo.list;
+  const qi = document.querySelector('#lead-col .search-row input');
+  if (qi && prevQ) { qi.value = prevQ; filterChats(prevQ); }
+  state.renderedPhone = state.activePhone;
 }
 
 const initTimeout = setTimeout(() => {
