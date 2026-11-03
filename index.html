@@ -131,6 +131,28 @@
   .chats-layout { grid-template-rows: minmax(0, 1fr); }
   .lead-col, .thread-col { min-height: 0; }
   .thread { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+  /* WhatsApp-style day groups: the date pill floats at the top while you scroll through that day */
+  .day-group { display: flex; flex-direction: column; gap: 8px; }
+  .day-sep { position: sticky; top: 4px; z-index: 2; align-self: center; margin: 6px 0 2px; padding: 4px 12px;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color: var(--text-dim);
+    font-size: 11.5px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+
+  /* Phone layout: the 220px side menu becomes a bottom tab bar so chats get the full screen width */
+  @media (max-width: 760px) {
+    .app { flex-direction: column-reverse; height: 100vh; min-height: 0; }
+    .nav { width: 100%; flex-direction: row; align-items: center; padding: 4px 8px; gap: 2px;
+      border-right: none; border-top: 1px solid var(--line); flex-shrink: 0; }
+    .brand, .who, .nav-spacer { display: none; }
+    .nav-item { flex: 1; justify-content: center; margin: 0; padding: 8px 4px; font-size: 12.5px; }
+    .theme-toggle, .logout-btn { width: auto; padding: 8px 10px; font-size: 0; gap: 0; }
+    .theme-toggle .nav-icon, .logout-btn .nav-icon { font-size: 16px; }
+    .main { min-height: 0; }
+    .page { padding: 14px 12px; }
+    .chats-layout { height: calc(100vh - 150px); }
+    .bubble { max-width: 85%; }
+    .thread { padding: 14px 12px; }
+  }
 </style>
 </head>
 <body>
@@ -177,7 +199,23 @@ try {
 
 function esc(str) { const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
 function fmtTime(ts) { const d = new Date(ts); if (isNaN(d)) return ''; return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); }
-function fmtListTime(ts) { const d = new Date(ts); if (isNaN(d)) return ''; const sameDay = d.toDateString() === new Date().toDateString(); return sameDay ? fmtTime(ts) : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); }
+function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function dayKey(ts) { const d = new Date(ts); return isNaN(d) ? 'unknown' : d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); }
+// "Today", "Yesterday", otherwise the full date (e.g. 29 Oct 2026) - same idea as WhatsApp
+function dayLabel(ts) {
+  const d = new Date(ts); if (isNaN(d)) return '';
+  const diff = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function fmtListTime(ts) {
+  const d = new Date(ts); if (isNaN(d)) return '';
+  const label = dayLabel(ts);
+  if (label === 'Today') return fmtTime(ts);
+  if (label === 'Yesterday') return 'Yesterday';
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
 function initials(phone) { return String(phone).replace(/\D/g, '').slice(-2) || '??'; }
 
 async function init() {
@@ -188,11 +226,18 @@ async function init() {
     if (session) await loadAppData();
     state.loading = false;
     render();
+    if (session) startLive();
 
-    supabaseClient.auth.onAuthStateChange((_event, session) => {
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      const prevUid = state.session?.user?.id;
       state.session = session;
-      if (session) { loadAppData().then(render); }
-      else { state.profile = null; state.leads = []; state.messages = []; render(); }
+      if (!session) {
+        if (prevUid) { stopLive(); state.profile = null; state.leads = []; state.messages = []; state.activePhone = null; render(); }
+        return;
+      }
+      // Token refreshes and re-focus events must not rebuild the screen (that was resetting the chat scroll).
+      if (session.user.id === prevUid && state.profile) return;
+      setTimeout(async () => { await loadAppData(); render(); startLive(); }, 0);
     });
   } catch (err) {
     state.loading = false;
@@ -217,12 +262,92 @@ async function loadAppData() {
     state.allProfiles = profiles || [];
   }
 
-  const { data: leads } = await supabaseClient.from('leads').select('*').order('timestamp', { ascending: false });
-  state.leads = leads || [];
-
-  const { data: messages } = await supabaseClient.from('messages').select('*').order('timestamp', { ascending: true });
-  state.messages = messages || [];
+  await fetchLeadsAndMessages();
 }
+
+// Supabase returns at most 1000 rows per request, so read in pages. Without this, once the
+// table grows past 1000 rows the NEWEST messages are the ones that silently go missing.
+async function fetchAllRows(table, orderCol, ascending) {
+  const PAGE = 1000;
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabaseClient.from(table).select('*')
+      .order(orderCol, { ascending }).order('id', { ascending })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE) break;
+  }
+  return rows;
+}
+async function fetchLeadsAndMessages() {
+  const [leads, messages] = await Promise.all([
+    fetchAllRows('leads', 'timestamp', false),
+    fetchAllRows('messages', 'timestamp', true),
+  ]);
+  state.leads = leads;
+  state.messages = messages;
+}
+function dataSignature() {
+  const lastMsg = state.messages.length ? state.messages[state.messages.length - 1].id : 0;
+  return state.messages.length + ':' + lastMsg + '|' + state.leads.map(l => [l.id, l.step, l.assigned_to, l.last_message, l.lead_name, l.timestamp].join('~')).join(',');
+}
+
+/* ---------- Live updates ----------
+   1) Realtime: Supabase pushes every new/changed message and lead straight to the screen.
+   2) Safety net: a quiet re-sync every 30s, when the app comes back to the foreground, and when the
+      network returns - so nothing is missed if the phone slept or the connection dropped. */
+let liveChannel = null, syncing = false, pollTimer = null;
+
+function startLive() {
+  stopLive();
+  if (!supabaseClient || !state.session) return;
+  liveChannel = supabaseClient.channel('crm-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, onMessageEvent)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, onLeadEvent)
+    .subscribe((status) => { if (status === 'SUBSCRIBED') resync(); });
+  pollTimer = setInterval(() => { if (!document.hidden) resync(); }, 30000);
+}
+function stopLive() {
+  if (liveChannel) { try { supabaseClient.removeChannel(liveChannel); } catch (e) {} liveChannel = null; }
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+async function resync() {
+  if (syncing || !state.session || !state.profile) return;
+  syncing = true;
+  try {
+    const before = dataSignature();
+    await fetchLeadsAndMessages();
+    if (dataSignature() !== before) softRender();
+  } catch (e) { /* offline or a hiccup: keep what is on screen, try again next time */ }
+  syncing = false;
+}
+function onMessageEvent(payload) {
+  const m = payload.new;
+  if (!m || m.id == null) return;
+  const i = state.messages.findIndex(x => x.id === m.id);
+  if (i >= 0) state.messages[i] = m; else state.messages.push(m);
+  softRender();
+}
+async function onLeadEvent(payload) {
+  const l = payload.new;
+  if (!l || l.id == null) return;
+  const i = state.leads.findIndex(x => x.id === l.id);
+  const wasKnown = i >= 0;
+  if (wasKnown) state.leads[i] = l; else state.leads.push(l);
+  state.leads.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  if (!wasKnown) {
+    // A lead this screen has not seen before (new, or just assigned to this team lead): load its history.
+    try {
+      const { data } = await supabaseClient.from('messages').select('*').eq('phone', l.phone).order('timestamp', { ascending: true }).limit(1000);
+      const have = new Set(state.messages.map(x => x.id));
+      for (const m of (data || [])) if (!have.has(m.id)) state.messages.push(m);
+    } catch (e) {}
+  }
+  softRender();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) resync(); });
+window.addEventListener('online', resync);
 
 function renderLogin() {
   return `
@@ -324,7 +449,7 @@ function renderDashboard() {
       </div>
       <div class="panel-block">
         <h3>Live data</h3>
-        <p>This dashboard is connected to your Supabase database. New leads and messages from your WhatsApp automation appear here automatically on refresh.</p>
+        <p>This dashboard is connected to your Supabase database. New leads and messages from your WhatsApp automation appear here automatically, no refresh needed.</p>
       </div>
     </div>`;
 }
@@ -378,11 +503,12 @@ window.filterContacts = function(q) {
 function groupMessages(msgs) {
   const map = new Map();
   for (const m of msgs) { if (!map.has(m.phone)) map.set(m.phone, []); map.get(m.phone).push(m); }
-  for (const [, arr] of map) arr.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  for (const [, arr] of map) arr.sort((a, b) => (new Date(a.timestamp) - new Date(b.timestamp)) || (a.id - b.id));
   return map;
 }
 
-function renderChats() {
+// Builds the conversation list and the open thread (with a date pill above each day) from current state.
+function buildChatParts() {
   const msgs = visibleMessages();
   const groups = groupMessages(msgs);
   const leadsByPhone = new Map(visibleLeads().map(l => [l.phone, l]));
@@ -404,19 +530,34 @@ function renderChats() {
     </div>`;
   }).join('') : `<div style="padding:20px;color:var(--text-faint);font-size:12.5px;">No conversations visible.</div>`;
 
-  let threadHtml = `<div class="empty">Select a conversation</div>`;
+  let bubblesHtml = '';
+  let headHtml = '';
   if (state.activePhone && groups.has(state.activePhone)) {
     const thread = groups.get(state.activePhone);
-    const bubbles = thread.map(m => `<div class="bubble ${m.direction}">${esc(m.message)}<span class="bubble-time mono">${fmtTime(m.timestamp)}</span></div>`).join('');
-    threadHtml = `
+    let currentDay = null, open = false;
+    for (const m of thread) {
+      const key = dayKey(m.timestamp);
+      if (key !== currentDay) {
+        if (open) bubblesHtml += `</div>`;
+        bubblesHtml += `<div class="day-group"><div class="day-sep">${esc(dayLabel(m.timestamp))}</div>`;
+        currentDay = key; open = true;
+      }
+      bubblesHtml += `<div class="bubble ${m.direction}">${esc(m.message)}<span class="bubble-time mono">${fmtTime(m.timestamp)}</span></div>`;
+    }
+    if (open) bubblesHtml += `</div>`;
+    headHtml = `
       <div class="thread-head">
         <button class="back-btn" onclick="setMobilePane('list')">‹</button>
         <div class="avatar">${initials(state.activePhone)}</div>
         <div class="mono" style="font-weight:700;">+${state.activePhone}</div>
-      </div>
-      <div class="thread">${bubbles}</div>`;
+      </div>`;
   }
+  return { listHtml, headHtml, bubblesHtml };
+}
 
+function renderChats() {
+  const { listHtml, headHtml, bubblesHtml } = buildChatParts();
+  const threadHtml = headHtml ? `${headHtml}<div class="thread">${bubblesHtml}</div>` : `<div class="empty">Select a conversation</div>`;
   return `
     <div class="page" style="padding-bottom:0;">
       <div class="page-head"><div class="page-title">Chats</div>${tlFilterHtml()}</div>
@@ -429,7 +570,60 @@ function renderChats() {
       </div>
     </div>`;
 }
-window.selectChat = function(phone) { state.activePhone = phone; setMobilePane('thread'); render(); };
+
+function scrollThreadToBottom() {
+  const t = document.querySelector('#thread-col .thread');
+  if (t) t.scrollTop = t.scrollHeight;
+}
+
+// Refreshes only the list and the open thread, keeping search text, list scroll and thread scroll position.
+function updateChatsView(opts) {
+  const forceBottom = !!(opts && opts.forceBottom);
+  const listEl = document.getElementById('chat-list');
+  const threadCol = document.getElementById('thread-col');
+  if (!listEl || !threadCol) return;
+  const { listHtml, headHtml, bubblesHtml } = buildChatParts();
+
+  listEl.innerHTML = listHtml;
+  const q = document.querySelector('#lead-col .search-row input');
+  if (q && q.value) filterChats(q.value);
+
+  if (!headHtml) { threadCol.innerHTML = `<div class="empty">Select a conversation</div>`; return; }
+  let threadEl = threadCol.querySelector('.thread');
+  const samePhone = threadCol.dataset.phone === state.activePhone && threadEl;
+  if (!samePhone) {
+    threadCol.innerHTML = `${headHtml}<div class="thread">${bubblesHtml}</div>`;
+    threadCol.dataset.phone = state.activePhone;
+    scrollThreadToBottom();
+    return;
+  }
+  const nearBottom = threadEl.scrollHeight - threadEl.scrollTop - threadEl.clientHeight < 80;
+  const prevTop = threadEl.scrollTop;
+  threadEl.innerHTML = bubblesHtml;
+  threadEl.scrollTop = (forceBottom || nearBottom) ? threadEl.scrollHeight : prevTop;
+}
+
+// Re-draws whatever page is open WITHOUT resetting scroll position or search boxes (used by live updates).
+function softRender() {
+  if (state.loading || !state.session || !state.profile) return;
+  if (state.page === 'chats') { updateChatsView(); return; }
+  const main = document.getElementById('main');
+  if (!main) return;
+  const prevTop = main.scrollTop;
+  const q = main.querySelector('.search-row input');
+  const prevQuery = q ? q.value : '';
+  main.innerHTML = state.page === 'dashboard' ? renderDashboard() : renderContacts();
+  main.scrollTop = prevTop;
+  if (prevQuery) { const nq = main.querySelector('.search-row input'); if (nq) { nq.value = prevQuery; filterContacts(prevQuery); } }
+  wireTlSelect();
+}
+
+window.selectChat = function(phone) {
+  state.activePhone = phone;
+  updateChatsView({ forceBottom: true });
+  setMobilePane('thread');
+  scrollThreadToBottom();   // after the pane is visible, so the newest message is in view
+};
 window.filterChats = function(q) {
   const qText = q.trim().toLowerCase();
   document.querySelectorAll('#chat-list .lead-item').forEach(el => {
@@ -465,10 +659,19 @@ function render() {
   const main = document.getElementById('main');
   if (state.page === 'dashboard') main.innerHTML = renderDashboard();
   else if (state.page === 'contacts') main.innerHTML = renderContacts();
-  else if (state.page === 'chats') { main.innerHTML = renderChats(); setMobilePane(window.innerWidth <= 760 ? 'list' : 'thread'); }
+  else if (state.page === 'chats') {
+    main.innerHTML = renderChats();
+    setMobilePane(window.innerWidth <= 760 ? 'list' : 'thread');
+    const tc = document.getElementById('thread-col');
+    if (tc) tc.dataset.phone = state.activePhone || '';
+    scrollThreadToBottom();   // open on the newest message, like WhatsApp
+  }
 
   document.querySelectorAll('.nav-item').forEach(el => el.addEventListener('click', () => { state.page = el.dataset.page; render(); }));
   document.getElementById('logout-btn').addEventListener('click', logout);
+  wireTlSelect();
+}
+function wireTlSelect() {
   const tlSelect = document.getElementById('tl-filter-select');
   if (tlSelect) tlSelect.addEventListener('change', (e) => { state.tlFilter = e.target.value; state.activePhone = null; render(); });
 }
