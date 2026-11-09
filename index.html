@@ -123,6 +123,12 @@
   .bubble.in { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 4px; }
   .bubble.out { align-self: flex-end; background: var(--bubble-out); border-bottom-right-radius: 4px; }
   .bubble-time { display: block; margin-top: 4px; font-size: 10px; color: var(--text-faint); text-align: right; }
+  /* Delivery ticks on messages we sent: one grey = sent, two grey = delivered, two blue = read, red ! = failed */
+  .ticks { display: inline-flex; align-items: center; margin-left: 4px; vertical-align: -2px; }
+  .ticks svg { width: 17px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .ticks.read { color: #34B7F1; }
+  .ticks.failed { color: var(--danger); }
+  .ticks.sent, .ticks.delivered, .ticks.pending { color: var(--text-faint); }
 
 
   /* Message box (WhatsApp-style): sits under the thread, never re-rendered by live updates so a draft is kept */
@@ -306,7 +312,8 @@ async function fetchLeadsAndMessages() {
 }
 function dataSignature() {
   const lastMsg = state.messages.length ? state.messages[state.messages.length - 1].id : 0;
-  return state.messages.length + ':' + lastMsg + '|' + state.leads.map(l => [l.id, l.step, l.assigned_to, l.last_message, l.lead_name, l.timestamp].join('~')).join(',');
+  const recentStatus = state.messages.slice(-40).map(m => m.status ? m.status[0] : '-').join('');   // so a new tick triggers a redraw
+  return state.messages.length + ':' + lastMsg + ':' + recentStatus + '|' + state.leads.map(l => [l.id, l.step, l.assigned_to, l.last_message, l.lead_name, l.timestamp].join('~')).join(',');
 }
 
 /* ---------- Live updates ----------
@@ -524,6 +531,18 @@ function groupMessages(msgs) {
   return map;
 }
 
+
+// Delivery state of a message we sent, drawn like WhatsApp: clock (sending), one tick (sent), two ticks (delivered), blue (read), red ! (failed).
+function tickHtml(m) {
+  if (m.direction !== 'out') return '';
+  const t = (cls, title, svg) => `<span class="ticks ${cls}" title="${title}" aria-label="${title}">${svg}</span>`;
+  if (m.pending) return t('pending', 'Sending', '<svg viewBox="0 0 17 11"><circle cx="8.5" cy="5.5" r="4"/><polyline points="8.5,3.2 8.5,5.6 10.2,6.6"/></svg>');
+  if (m.status === 'failed') return t('failed', 'Not delivered', '<svg viewBox="0 0 17 11"><circle cx="8.5" cy="5.5" r="4.6"/><line x1="8.5" y1="3" x2="8.5" y2="6"/><line x1="8.5" y1="7.8" x2="8.5" y2="7.9"/></svg>');
+  if (m.status === 'read' || m.status === 'delivered') return t(m.status, m.status === 'read' ? 'Read' : 'Delivered', '<svg viewBox="0 0 17 11"><polyline points="1,6 4,9 10.5,1.8"/><polyline points="6.2,8.2 7,9 13.5,1.8"/></svg>');
+  if (m.status === 'sent') return t('sent', 'Sent', '<svg viewBox="0 0 17 11"><polyline points="3.5,6 6.5,9 13,1.8"/></svg>');
+  return '';   // older messages have no status recorded
+}
+
 // Builds the conversation list and the open thread (with a date pill above each day) from current state.
 function buildChatParts() {
   const msgs = visibleMessages();
@@ -560,7 +579,7 @@ function buildChatParts() {
         bubblesHtml += `<div class="day-group"><div class="day-sep">${esc(dayLabel(m.timestamp))}</div>`;
         currentDay = key; open = true;
       }
-      bubblesHtml += `<div class="bubble ${m.direction}${m.pending ? ' pending' : ''}">${esc(m.message)}<span class="bubble-time mono">${m.pending ? 'Sending…' : fmtTime(m.timestamp)}</span></div>`;
+      bubblesHtml += `<div class="bubble ${m.direction}${m.pending ? ' pending' : ''}">${esc(m.message)}<span class="bubble-time mono">${m.pending ? 'Sending…' : fmtTime(m.timestamp)}${tickHtml(m)}</span></div>`;
     }
     if (open) bubblesHtml += `</div>`;
     headHtml = `
