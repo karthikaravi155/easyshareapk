@@ -546,7 +546,9 @@ function renderDashboard() {
 
 function renderContacts() {
   const isAdmin = state.profile.role === 'admin';
-  const leads = visibleLeads();
+  // Fixed order: newest lead first, by the order each lead first arrived (its id never changes).
+  // A lead keeps its place here even when it sends new messages - only the Chats list reorders by latest message.
+  const leads = visibleLeads().slice().sort((a, b) => Number(b.id) - Number(a.id));
   const rows = leads.map(l => `
     <tr>
       <td class="mono" data-label="Phone">+${esc(l.phone)}</td>
