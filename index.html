@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>EasyShare Leads</title>
 <meta name="theme-color" content="#0E1620">
 <link rel="manifest" href="manifest.json">
@@ -18,8 +18,12 @@
     --text: #E7ECEF; --text-dim: #8DA0AD; --text-faint: #5E717D;
     --accent: #22A583; --accent-dim: #163B32; --gold: #D4A24C;
     --bubble-in: #1B2732; --bubble-out: #1D4B3F; --danger: #C25450;
+    --app-h: 100vh;                       /* real visible height; the script below keeps it exact when the keyboard opens */
+    --safe-y: calc(env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px));
+    --vh-full: calc(var(--app-h) - var(--safe-y));
     font-family: 'Manrope', system-ui, sans-serif;
   }
+  @supports (height: 100dvh) { :root { --app-h: 100dvh; } }
   :root[data-theme="light"] {
     --bg: #F4F6F8; --panel: #FFFFFF; --panel-2: #F0F3F5; --line: #DEE4E8;
     --text: #19242D; --text-dim: #5C6B76; --text-faint: #8B98A2;
@@ -27,6 +31,9 @@
     --bubble-in: #EEF1F3; --bubble-out: #D7F0E8; --danger: #C25450;
   }
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior-y: none; }   /* stops pull-down-to-refresh from wiping a half-typed message */
+  button, .nav-item, .lead-item { touch-action: manipulation; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
     padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
     transition: background 0.15s ease, color 0.15s ease; }
@@ -39,7 +46,7 @@
   button { font-family: inherit; cursor: pointer; }
   input { font-family: inherit; }
 
-  .login-wrap { position: relative; height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .login-wrap { position: relative; min-height: var(--vh-full); display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
   .login-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 32px 28px; }
   .login-brand { font-weight: 800; font-size: 19px; text-align: center; margin-bottom: 6px; }
   .login-brand span { color: var(--accent); }
@@ -101,8 +108,6 @@
   .chats-layout { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 110px); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   @media (max-width: 760px) {
     .chats-layout { grid-template-columns: 1fr; }
-    .lead-col { display: var(--lead-col-display, flex); }
-    .thread-col { display: var(--thread-col-display, none); }
   }
   .lead-col { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; flex-direction: column; }
   .lead-col .search-row { position: sticky; top: 0; background: var(--panel); z-index: 1; }
@@ -116,10 +121,11 @@
   .lead-preview { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
   .thread-col { display: flex; flex-direction: column; background: var(--bg); }
   .thread-head { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
-  .back-btn { display: none; background: none; border: none; color: var(--text-dim); font-size: 20px; }
-  @media (max-width: 760px) { .back-btn { display: block; } }
+  .back-btn { display: none; align-items: center; justify-content: center; width: 40px; height: 40px; margin-left: -8px; background: none; border: none; color: var(--text-dim); font-size: 28px; line-height: 1; border-radius: 50%; }
+  .back-btn:active { background: var(--panel-2); }
+  @media (max-width: 760px) { .back-btn { display: flex; } }
   .thread { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
-  .bubble { max-width: 70%; padding: 9px 13px; border-radius: 13px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
+  .bubble { max-width: 70%; padding: 9px 13px; border-radius: 13px; font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
   .bubble.in { align-self: flex-start; background: var(--bubble-in); border-bottom-left-radius: 4px; }
   .bubble.out { align-self: flex-end; background: var(--bubble-out); border-bottom-right-radius: 4px; }
   .bubble-time { display: block; margin-top: 4px; font-size: 10px; color: var(--text-faint); text-align: right; }
@@ -147,7 +153,7 @@
   .bubble.pending { opacity: 0.65; }
 
   .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-dim); text-align: center; padding: 30px; }
-  .loading { display: flex; align-items: center; justify-content: center; height: 100vh; color: var(--text-dim); font-size: 13px; }
+  .loading { display: flex; align-items: center; justify-content: center; height: var(--vh-full); color: var(--text-dim); font-size: 13px; }
 
   /* Scroll fix: messages scroll inside the chat box */
   .chats-layout { grid-template-rows: minmax(0, 1fr); }
@@ -160,20 +166,68 @@
     background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; color: var(--text-dim);
     font-size: 11.5px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
 
-  /* Phone layout: the 220px side menu becomes a bottom tab bar so chats get the full screen width */
+  /* ---------- Phone layout (<= 760px) ----------
+     - side menu becomes a bottom tab bar (hidden while a chat is open, like WhatsApp)
+     - Chats: list first, tapping a lead opens the conversation full screen, back returns to the list
+     - Contacts: each lead is a card instead of a wide table
+     - everything is sized from the real visible height so the message box never hides behind the keyboard */
   @media (max-width: 760px) {
-    .app { flex-direction: column-reverse; height: 100vh; min-height: 0; }
-    .nav { width: 100%; flex-direction: row; align-items: center; padding: 4px 8px; gap: 2px;
+    input, textarea, select { font-size: 16px !important; }   /* 16px stops phones zooming in when a field is tapped */
+
+    .app { flex-direction: column-reverse; height: 100vh; height: var(--vh-full); min-height: 0; }
+    .nav { width: 100%; flex-direction: row; align-items: stretch; padding: 4px 6px; gap: 2px;
       border-right: none; border-top: 1px solid var(--line); flex-shrink: 0; }
     .brand, .who, .nav-spacer { display: none; }
-    .nav-item { flex: 1; justify-content: center; margin: 0; padding: 8px 4px; font-size: 12.5px; }
-    .theme-toggle, .logout-btn { width: auto; padding: 8px 10px; font-size: 0; gap: 0; }
-    .theme-toggle .nav-icon, .logout-btn .nav-icon { font-size: 16px; }
-    .main { min-height: 0; }
+    .nav-item { flex: 1; flex-direction: column; justify-content: center; gap: 2px; margin: 0; padding: 6px 4px; min-height: 52px; font-size: 11.5px; text-align: center; }
+    .nav-icon { width: auto; font-size: 17px; line-height: 1; }
+    .theme-toggle, .logout-btn { width: 48px; min-height: 52px; padding: 6px; font-size: 0; gap: 0; justify-content: center; flex-shrink: 0; }
+    .theme-toggle .nav-icon, .logout-btn .nav-icon { font-size: 18px; }
+
+    .main { min-height: 0; display: flex; flex-direction: column; }
     .page { padding: 14px 12px; }
-    .chats-layout { height: calc(100vh - 150px); }
+    .page-title { font-size: 18px; }
+    .page-head { margin-bottom: 14px; }
+    .tl-filter { width: 100%; }
+    .tl-filter select { flex: 1; min-height: 40px; }
+    .search-row input { min-height: 40px; }
+
+    .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .stat-card { padding: 14px; }
+    .stat-value { font-size: 22px; margin-top: 6px; }
+
+    /* Contacts as cards */
+    .table-scroll { overflow: visible; }
+    #contacts-table, #contacts-table tbody { display: block; width: 100%; }
+    #contacts-table thead { display: none; }
+    #contacts-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+    #contacts-table tr:last-child { border-bottom: none; }
+    #contacts-table td { display: block; padding: 0; border: none; white-space: normal; overflow-wrap: anywhere; font-size: 13.5px; }
+    #contacts-table td::before { content: attr(data-label); display: block; margin-bottom: 1px; font-size: 11px; font-weight: 600; color: var(--text-faint); }
+    #contacts-table td:first-child { grid-column: 1 / -1; font-size: 14.5px; font-weight: 600; }
+    #contacts-table td:first-child::before { display: none; }
+    #contacts-table td[colspan] { grid-column: 1 / -1; }
+    #contacts-table td[colspan]::before { display: none; }
+
+    /* Chats: list OR conversation, filling the screen */
+    .page.chats-page { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 10px 0; }
+    .chats-page .page-head { margin-bottom: 10px; }
+    .chats-layout { flex: 1; height: auto; min-height: 0; }
+    .chats-layout .lead-col { display: flex; }
+    .chats-layout .thread-col { display: none; }
+    .chats-layout.show-thread .lead-col { display: none; }
+    .chats-layout.show-thread .thread-col { display: flex; }
+    .lead-item { padding: 12px; }
+    .thread-head { padding: 8px 12px; gap: 8px; }
+    .thread { padding: 12px 10px; }
     .bubble { max-width: 85%; }
-    .thread { padding: 14px 12px; }
+    .composer { padding: 8px 8px 10px; }
+    .send-btn { width: 46px; height: 46px; }
+
+    /* While a conversation is open: no bottom tabs, no page title, edge to edge */
+    .app.in-thread .nav { display: none; }
+    .app.in-thread .page.chats-page { padding: 0; }
+    .app.in-thread .chats-page .page-head { display: none; }
+    .app.in-thread .chats-layout { border: none; border-radius: 0; }
   }
 </style>
 </head>
@@ -182,6 +236,18 @@
 <div id="root"></div>
 
 <script>
+(function syncVisibleHeight() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const set = () => {
+    if (vv.scale > 1.01) return;   // do not fight the person's own pinch-zoom
+    document.documentElement.style.setProperty('--app-h', Math.round(vv.height) + 'px');
+    if (window.scrollY) window.scrollTo(0, 0);
+  };
+  vv.addEventListener('resize', set);
+  vv.addEventListener('scroll', () => { if (vv.scale <= 1.01 && vv.offsetTop) window.scrollTo(0, 0); });
+  set();
+})();
 function syncThemeColorMeta() {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', document.documentElement.getAttribute('data-theme') === 'light' ? '#F4F6F8' : '#0E1620');
@@ -483,14 +549,14 @@ function renderContacts() {
   const leads = visibleLeads();
   const rows = leads.map(l => `
     <tr>
-      <td class="mono">+${esc(l.phone)}</td>
-      <td>${esc(l.lead_name) || '—'}</td>
-      ${isAdmin ? `<td>${esc(tlName(l.assigned_to))}</td>` : ''}
-      <td>${esc(l.fund_range) || '—'}</td>
-      <td>${esc(l.segment) || '—'}</td>
-      <td>${esc(l.state) || '—'}</td>
-      <td>${esc(l.language) || '—'}</td>
-      <td><span class="tag ${l.step === 'done' ? 'done' : 'progress'}">${l.step === 'done' ? 'Completed' : 'In progress'}</span></td>
+      <td class="mono" data-label="Phone">+${esc(l.phone)}</td>
+      <td data-label="Name">${esc(l.lead_name) || '—'}</td>
+      ${isAdmin ? `<td data-label="Assigned to">${esc(tlName(l.assigned_to))}</td>` : ''}
+      <td data-label="Fund">${esc(l.fund_range) || '—'}</td>
+      <td data-label="Segment">${esc(l.segment) || '—'}</td>
+      <td data-label="State">${esc(l.state) || '—'}</td>
+      <td data-label="Language">${esc(l.language) || '—'}</td>
+      <td data-label="Status"><span class="tag ${l.step === 'done' ? 'done' : 'progress'}">${l.step === 'done' ? 'Completed' : 'In progress'}</span></td>
     </tr>`).join('');
   return `
     <div class="page">
@@ -582,17 +648,21 @@ function buildChatParts() {
       bubblesHtml += `<div class="bubble ${m.direction}${m.pending ? ' pending' : ''}">${esc(m.message)}<span class="bubble-time mono">${m.pending ? 'Sending…' : fmtTime(m.timestamp)}${tickHtml(m)}</span></div>`;
     }
     if (open) bubblesHtml += `</div>`;
+    const headName = leadsByPhone.get(state.activePhone)?.lead_name || '';
     headHtml = `
       <div class="thread-head">
-        <button class="back-btn" onclick="setMobilePane('list')">‹</button>
+        <button class="back-btn" onclick="goBackToList()" aria-label="Back to chats">‹</button>
         <div class="avatar">${initials(state.activePhone)}</div>
-        <div class="mono" style="font-weight:700;">+${state.activePhone}</div>
+        <div style="min-width:0;">
+          <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" ${headName ? '' : 'class="mono"'}>${headName ? esc(headName) : '+' + state.activePhone}</div>
+          ${headName ? `<div class="mono" style="font-size:11.5px;color:var(--text-dim);">+${state.activePhone}</div>` : ''}
+        </div>
       </div>`;
     composerHtml = `
       <div class="composer" id="composer">
         <div class="composer-note" id="composer-note"></div>
         <div class="composer-row">
-          <textarea id="composer-input" rows="1" placeholder="Type a message" oninput="composerInput(this)" onkeydown="composerKey(event)"></textarea>
+          <textarea id="composer-input" rows="1" placeholder="Type a message" oninput="composerInput(this)" onkeydown="composerKey(event)" onfocus="setTimeout(scrollThreadToBottom, 300)"></textarea>
           <button class="send-btn" id="send-btn" onclick="sendMessage()" aria-label="Send">➤</button>
         </div>
       </div>`;
@@ -604,7 +674,7 @@ function renderChats() {
   const { listHtml, headHtml, bubblesHtml, composerHtml } = buildChatParts();
   const threadHtml = headHtml ? `${headHtml}<div class="thread">${bubblesHtml}</div>${composerHtml}` : `<div class="empty">Select a conversation</div>`;
   return `
-    <div class="page" style="padding-bottom:0;">
+    <div class="page chats-page" style="padding-bottom:0;">
       <div class="page-head"><div class="page-title">Chats</div>${tlFilterHtml()}</div>
       <div class="chats-layout" id="chats-layout">
         <div class="lead-col" id="lead-col">
@@ -745,12 +815,20 @@ window.sendMessage = async function() {
   refreshComposerState();
 };
 
+const isPhoneWidth = () => window.matchMedia('(max-width: 760px)').matches;
 window.selectChat = function(phone) {
   state.activePhone = phone;
   updateChatsView({ forceBottom: true });
   setMobilePane('thread');
+  // One history entry per opened chat, so the phone's Back button returns to the list instead of closing the app
+  if (isPhoneWidth() && !(history.state && history.state.chat)) { try { history.pushState({ chat: true }, ''); } catch (e) {} }
   scrollThreadToBottom();   // after the pane is visible, so the newest message is in view
 };
+window.goBackToList = function() {
+  if (history.state && history.state.chat) history.back();   // popstate below switches the pane
+  else setMobilePane('list');
+};
+window.addEventListener('popstate', () => { if (state.page === 'chats') setMobilePane('list'); });
 window.filterChats = function(q) {
   const qText = q.trim().toLowerCase();
   document.querySelectorAll('#chat-list .lead-item').forEach(el => {
@@ -761,8 +839,9 @@ window.filterChats = function(q) {
 window.setMobilePane = function(which) {
   const layout = document.getElementById('chats-layout');
   if (!layout) return;
-  layout.style.setProperty('--lead-col-display', which === 'list' ? 'flex' : 'none');
-  layout.style.setProperty('--thread-col-display', which === 'thread' ? 'flex' : 'none');
+  layout.classList.toggle('show-thread', which === 'thread');
+  const app = document.querySelector('.app');
+  if (app) app.classList.toggle('in-thread', which === 'thread');   // hides the bottom tabs while a chat is open (phones only)
 };
 
 function render() {
