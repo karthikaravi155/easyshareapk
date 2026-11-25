@@ -567,7 +567,7 @@ function renderContacts() {
       <td data-label="Segment">${esc(l.segment) || '—'}</td>
       <td data-label="State">${esc(l.state) || '—'}</td>
       <td data-label="Language">${esc(l.language) || '—'}</td>
-      <td data-label="Status"><span class="tag ${l.step === 'done' ? 'done' : 'progress'}">${l.step === 'done' ? 'Completed' : 'In progress'}</span></td>
+      <td data-label="Status"><span class="tag ${l.step === 'done' ? 'done' : 'progress'}">${l.step === 'done' ? 'Completed' : l.step === 'stopped' ? 'Not interested' : 'In progress'}</span></td>
     </tr>`).join('');
   return `
     <div class="page">
