@@ -379,7 +379,7 @@ async function fetchLeadsAndMessages() {
 function dataSignature() {
   const lastMsg = state.messages.length ? state.messages[state.messages.length - 1].id : 0;
   const recentStatus = state.messages.slice(-40).map(m => m.status ? m.status[0] : '-').join('');   // so a new tick triggers a redraw
-  return state.messages.length + ':' + lastMsg + ':' + recentStatus + '|' + state.leads.map(l => [l.id, l.step, l.assigned_to, l.last_message, l.lead_name, l.timestamp].join('~')).join(',');
+  return state.messages.length + ':' + lastMsg + ':' + recentStatus + '|' + state.leads.map(l => [l.id, l.step, l.assigned_to, l.last_message, l.lead_name, l.wa_name, l.timestamp].join('~')).join(',');
 }
 
 /* ---------- Live updates ----------
@@ -544,6 +544,15 @@ function renderDashboard() {
     </div>`;
 }
 
+// The WhatsApp profile name is the reliable one; lead_name is whatever the lead typed at the name step
+// (often a question, a broker name or "No"), so it is only a fallback.
+function displayName(l) {
+  if (!l) return '';
+  const wa = (l.wa_name || '').trim();
+  if (wa) return wa;
+  const typed = (l.lead_name || '').trim();
+  return typed.length <= 30 && !/[?]/.test(typed) ? typed : '';
+}
 function renderContacts() {
   const isAdmin = state.profile.role === 'admin';
   // Fixed order: newest lead first, by the order each lead first arrived (its id never changes).
@@ -552,7 +561,7 @@ function renderContacts() {
   const rows = leads.map(l => `
     <tr>
       <td class="mono" data-label="Phone">+${esc(l.phone)}</td>
-      <td data-label="Name">${esc(l.lead_name) || '—'}</td>
+      <td data-label="Name">${esc(displayName(l)) || '—'}</td>
       ${isAdmin ? `<td data-label="Assigned to">${esc(tlName(l.assigned_to))}</td>` : ''}
       <td data-label="Fund">${esc(l.fund_range) || '—'}</td>
       <td data-label="Segment">${esc(l.segment) || '—'}</td>
@@ -623,7 +632,7 @@ function buildChatParts() {
   const listHtml = phones.length ? phones.map(phone => {
     const thread = groups.get(phone), last = thread.at(-1);
     const active = phone === state.activePhone ? 'active' : '';
-    const name = leadsByPhone.get(phone)?.lead_name || '';
+    const name = displayName(leadsByPhone.get(phone));
     const searchKey = (phone + ' ' + name).toLowerCase();
     return `<div class="lead-item ${active}" data-search="${esc(searchKey)}" onclick="selectChat('${phone}')">
       <div class="avatar">${initials(phone)}</div>
@@ -650,7 +659,7 @@ function buildChatParts() {
       bubblesHtml += `<div class="bubble ${m.direction}${m.pending ? ' pending' : ''}">${esc(m.message)}<span class="bubble-time mono">${m.pending ? 'Sending…' : fmtTime(m.timestamp)}${tickHtml(m)}</span></div>`;
     }
     if (open) bubblesHtml += `</div>`;
-    const headName = leadsByPhone.get(state.activePhone)?.lead_name || '';
+    const headName = displayName(leadsByPhone.get(state.activePhone));
     headHtml = `
       <div class="thread-head">
         <button class="back-btn" onclick="goBackToList()" aria-label="Back to chats">‹</button>
