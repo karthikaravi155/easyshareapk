@@ -811,7 +811,10 @@ window.sendMessage = async function() {
     updateChatsView();
     composerError(e.code === 'outside_24h' ? 'Not sent: the 24-hour WhatsApp reply window has closed.'
       : e.code === 'not_allowed' ? 'Not sent: you do not have access to this lead.'
-      : 'Not sent. Check your connection and try again.');
+      : e.code === 'send_failed' ? 'Not sent: WhatsApp refused the message right now (it limits repeated messages). Wait a minute and try again.'
+      : e.message === 'login' ? 'Not sent: your session expired. Log out and log in again.'
+      : 'Not sent: could not reach the server. Check your internet and try again.');
+    console.error('send failed', e);
   }
   sending = false;
   refreshComposerState();
